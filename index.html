@@ -1,0 +1,1238 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Mega Knight Chess</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Lilita+One&display=swap">
+<style>
+/* Layout: turn card (die + status) sits above the board on phones; on wide screens the board is left and a control rail is right.
+   Palette: cool slate arena. Red belongs only to the Mega Knight and a rolled 6. */
+:root {
+  --bg: #e8ecf1; --surface: #f7f9fc; --fg: #151a21; --muted: #5a6677; --line: #cbd3de;
+  --sq-light: #dbe1ea; --sq-dark: #8d9bb2;
+  --white-piece: #fffdf8; --white-edge: #0f1318; --black-piece: #13171d; --black-edge: #f1f4f8;
+  --mega: #dc2229; --mega-deep: #6f0c11; --mega-tint: rgba(220, 34, 41, .30);
+  --warn: #e08a00; --sel: rgba(36, 112, 255, .38); --last: rgba(255, 190, 0, .38);
+  --giga: #3fb4ff; --giga-deep: #0b3a66; --giga-tint: rgba(63, 180, 255, .30);
+  --focus: #1f6feb;
+  --font-display: 'Lilita One', 'Impact', 'Arial Rounded MT Bold', sans-serif;
+  --font-body: 'Barlow', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-sym: 'Segoe UI Symbol', 'Noto Sans Symbols 2', 'DejaVu Sans', 'Arial Unicode MS', 'Apple Symbols', sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1117; --surface: #171d27; --fg: #e9eef5; --muted: #94a1b4; --line: #2b3444;
+    --sq-light: #4a566d; --sq-dark: #2b3548;
+    --mega: #ee3037; --mega-deep: #7e0e14; --mega-tint: rgba(238, 48, 55, .36);
+    --sel: rgba(90, 160, 255, .42); --last: rgba(255, 200, 40, .30); --focus: #5aa2ff;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1117; --surface: #171d27; --fg: #e9eef5; --muted: #94a1b4; --line: #2b3444;
+  --sq-light: #4a566d; --sq-dark: #2b3548;
+  --mega: #ee3037; --mega-deep: #7e0e14; --mega-tint: rgba(238, 48, 55, .36);
+  --sel: rgba(90, 160, 255, .42); --last: rgba(255, 200, 40, .30); --focus: #5aa2ff;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); font: 16px/1.45 var(--font-body);
+  padding-block: 18px 30px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+button { font-family: inherit; }
+.app {
+  max-width: 1040px; margin: 0 auto; display: grid; gap: 14px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "top" "turn" "board" "rest";
+}
+@media (min-width: 880px) {
+  .app {
+    grid-template-columns: minmax(0, 1fr) 330px;
+    grid-template-areas: "top top" "board turn" "board rest";
+    grid-template-rows: auto auto 1fr; align-items: start; gap: 16px 24px;
+  }
+}
+.top { grid-area: top; }
+h1 { margin: 0; font: 400 clamp(32px, 6vw, 46px)/1 var(--font-display); letter-spacing: .01em; text-wrap: balance; }
+h1 .m { color: var(--mega); }
+.sub { margin: 6px 0 0; color: var(--muted); max-width: 60ch; text-wrap: pretty; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; min-width: 0; }
+.turn { grid-area: turn; display: flex; gap: 14px; align-items: center; }
+.rest { grid-area: rest; display: grid; gap: 14px; min-width: 0; }
+.turn-info { min-width: 0; display: grid; gap: 6px; }
+.chip { display: flex; align-items: center; gap: 8px; font: 400 22px/1 var(--font-display); letter-spacing: .02em; }
+.dot { width: 18px; height: 18px; border-radius: 50%; flex: none; border: 2px solid var(--muted); }
+.dot.w { background: var(--white-piece); border-color: var(--white-edge); }
+.dot.b { background: var(--black-piece); border-color: var(--black-edge); box-shadow: 0 0 0 1px var(--line); }
+#status { margin: 0; font-size: 15px; color: var(--fg); text-wrap: pretty; }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn {
+  font: 600 14px/1 var(--font-body); padding: 10px 14px; border-radius: 10px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface); color: var(--fg);
+}
+.btn:hover { border-color: var(--muted); }
+.btn.danger { background: var(--mega); color: #fff; border-color: var(--mega-deep); }
+.btn:focus-visible, .die:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+/* die */
+.die {
+  --s: 78px; width: var(--s); height: var(--s); flex: none; position: relative; padding: 11px;
+  border-radius: 18px; border: 2px solid var(--fg); background: var(--surface); color: var(--fg);
+  display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); cursor: pointer;
+  box-shadow: 0 4px 0 var(--fg); transition: transform .12s;
+}
+.die:disabled { cursor: default; }
+.die:not(:disabled):active { transform: translateY(3px); box-shadow: 0 1px 0 var(--fg); }
+.die.ready { animation: nudge 1.8s ease-in-out infinite; }
+.die .pip { width: 76%; height: 76%; border-radius: 50%; place-self: center; }
+.die .pip.on { background: currentColor; }
+.die.six { background: var(--mega); border-color: var(--mega-deep); color: #fff; box-shadow: 0 4px 0 var(--mega-deep), 0 0 26px var(--mega-tint); }
+.die.q::after { content: "?"; position: absolute; inset: 0; display: grid; place-items: center; font: 400 36px var(--font-display); color: var(--muted); }
+.die.rolling { animation: tumble .26s linear infinite; }
+@keyframes tumble { 0% { transform: rotate(-9deg); } 50% { transform: rotate(9deg) translateY(-4px); } 100% { transform: rotate(-9deg); } }
+@keyframes nudge { 0%, 100% { transform: none; } 50% { transform: translateY(-3px); } }
+
+/* board */
+.stage { grid-area: board; min-width: 0; }
+.board {
+  position: relative; width: 100%; max-width: 660px; margin: 0 auto; aspect-ratio: 1;
+  container-type: inline-size; border-radius: 8px; overflow: hidden;
+  box-shadow: 0 0 0 3px var(--fg), 0 14px 34px rgba(0, 0, 0, .28); background: var(--sq-dark);
+}
+.board.shake { animation: shake .42s; }
+@keyframes shake { 0%, 100% { transform: none; } 20% { transform: translate(-5px, 3px); } 40% { transform: translate(5px, -3px); } 60% { transform: translate(-3px, 2px); } 80% { transform: translate(2px, -1px); } }
+.grid { position: absolute; inset: 0; display: grid; grid-template: repeat(8, minmax(0, 1fr)) / repeat(8, minmax(0, 1fr)); }
+.cell {
+  --bt: 0cqw; --bb: 0cqw; --bl: 0cqw; --br: 0cqw;
+  position: relative; display: grid; place-items: center; border: 0; margin: 0; padding: 0; cursor: default;
+  background: var(--sq-light); -webkit-tap-highlight-color: transparent; min-width: 0; min-height: 0;
+}
+.cell.dark { background: var(--sq-dark); }
+.cell:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; z-index: 4; }
+.cell::before { content: ""; position: absolute; inset: 0; pointer-events: none; }
+.cell.last::before { background: var(--last); }
+.cell.sel::before { background: var(--sel); }
+.cell.chk::before { background: radial-gradient(circle, rgba(224, 138, 0, .9) 0%, rgba(224, 138, 0, 0) 72%); }
+.cell.tm::before { background: var(--mega-tint); box-shadow: inset var(--bl) var(--bt) 0 0 var(--mega), inset calc(-1 * var(--br)) calc(-1 * var(--bb)) 0 0 var(--mega); }
+.cell.tm.tsq::before { background: rgba(220, 34, 41, .5); }
+.cell.e-t { --bt: .7cqw; } .cell.e-b { --bb: .7cqw; } .cell.e-l { --bl: .7cqw; } .cell.e-r { --br: .7cqw; }
+.cell.tmove, .cell.tcap { cursor: pointer; }
+.cell.tm, .cell.sel { cursor: pointer; }
+.cell.tmove::after { content: ""; position: absolute; width: 30%; height: 30%; border-radius: 50%; background: rgba(15, 22, 34, .36); z-index: 2; pointer-events: none; }
+.cell.tcap::after { content: ""; position: absolute; inset: 6%; border-radius: 50%; border: .9cqw solid rgba(15, 22, 34, .5); z-index: 2; pointer-events: none; }
+.lab { position: absolute; font: 600 2.2cqw/1 var(--font-body); pointer-events: none; color: var(--sq-dark); z-index: 1; }
+.cell.dark .lab { color: var(--sq-light); }
+.lab.rk { top: 4%; left: 6%; } .lab.fl { bottom: 4%; right: 6%; }
+.pc { position: relative; z-index: 1; font: 10.4cqw/1 var(--font-sym); pointer-events: none; }
+.pc.w { color: var(--white-piece); text-shadow: .035em 0 0 var(--white-edge), -.035em 0 0 var(--white-edge), 0 .035em 0 var(--white-edge), 0 -.035em 0 var(--white-edge), .03em .03em 0 var(--white-edge), -.03em -.03em 0 var(--white-edge), .03em -.03em 0 var(--white-edge), -.03em .03em 0 var(--white-edge); }
+.pc.b { color: var(--black-piece); text-shadow: .035em 0 0 var(--black-edge), -.035em 0 0 var(--black-edge), 0 .035em 0 var(--black-edge), 0 -.035em 0 var(--black-edge), .03em .03em 0 var(--black-edge), -.03em -.03em 0 var(--black-edge), .03em -.03em 0 var(--black-edge), -.03em .03em 0 var(--black-edge); }
+.cell.tsq .pc { animation: wob .45s ease-in-out infinite; }
+@keyframes wob { 0%, 100% { transform: rotate(-6deg); } 50% { transform: rotate(6deg) scale(.94); } }
+
+.layer { position: absolute; inset: 0; pointer-events: none; }
+#megaLayer { z-index: 5; } #fx { z-index: 6; }
+.mega { position: absolute; width: 25%; height: 25%; transition: left .5s cubic-bezier(.35, .1, .25, 1), top .5s cubic-bezier(.35, .1, .25, 1); }
+.mega .body {
+  position: absolute; inset: 3%; border-radius: 16%; display: grid; place-items: center;
+  background: radial-gradient(circle at 30% 22%, #ff7f83 0%, var(--mega) 46%, var(--mega-deep) 100%);
+  box-shadow: inset 0 0 0 .6cqw rgba(0, 0, 0, .38), inset 0 0 0 1.2cqw rgba(255, 255, 255, .12), 0 1.2cqw 2.6cqw rgba(0, 0, 0, .5);
+}
+.mega .tag { position: absolute; top: 7%; font: 400 2.3cqw/1 var(--font-display); letter-spacing: .2em; color: #ffd8d4; }
+.mega .g { font: 19cqw/1 var(--font-sym); color: #fff6f2; margin-top: 0; text-shadow: 0 0 .7cqw var(--mega-deep), .4cqw .4cqw 0 var(--mega-deep), -.3cqw -.3cqw 0 var(--mega-deep); }
+.mega.sel .body { box-shadow: inset 0 0 0 .7cqw #fff, 0 0 3.4cqw 1cqw var(--mega); }
+/* Giga Knight: same icon as the Mega Knight, in light blue */
+.mega.giga .body {
+  background: radial-gradient(circle at 30% 22%, #c4eaff 0%, var(--giga) 46%, var(--giga-deep) 100%);
+}
+.mega.giga .g { font-size: 28cqw; color: #f3fbff; text-shadow: 0 0 .7cqw var(--giga-deep), .5cqw .5cqw 0 var(--giga-deep), -.4cqw -.4cqw 0 var(--giga-deep); }
+.mega.giga.sel .body { box-shadow: inset 0 0 0 .7cqw #fff, 0 0 3.4cqw 1cqw var(--giga); }
+.mega.giga.ready .body { animation: pulseG 1.1s ease-in-out infinite; }
+@keyframes pulseG { 0%, 100% { filter: none; } 50% { filter: brightness(1.28) drop-shadow(0 0 1.4cqw var(--giga)); } }
+.cell.tm.tg::before { background: var(--giga-tint); box-shadow: inset var(--bl) var(--bt) 0 0 var(--giga), inset calc(-1 * var(--br)) calc(-1 * var(--bb)) 0 0 var(--giga); }
+.cell.tm.tg.tsq::before { background: rgba(123, 44, 240, .5); }
+.boom.giga::before, .boom.giga::after { border-color: var(--giga); }
+.mega.ready .body { animation: pulse 1.1s ease-in-out infinite; }
+.mega.hop .body { animation: hop .5s ease-in-out; }
+.mega.spawn .body { animation: spawn .8s cubic-bezier(.2, 1.4, .4, 1); }
+@keyframes pulse { 0%, 100% { filter: none; } 50% { filter: brightness(1.28) drop-shadow(0 0 1.4cqw var(--mega)); } }
+@keyframes hop { 0%, 100% { transform: scale(1); } 45% { transform: scale(1.22) translateY(-2cqw); } }
+@keyframes spawn { 0% { transform: scale(.2); filter: brightness(3); } 60% { transform: scale(1.18); } 100% { transform: scale(1); filter: none; } }
+.boom { position: absolute; width: 25%; height: 25%; }
+.boom::before, .boom::after { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 1.1cqw solid var(--mega); opacity: 0; animation: ring .7s ease-out forwards; }
+.boom::after { animation-delay: .12s; border-width: .6cqw; }
+.boom.small::after { display: none; }
+@keyframes ring { 0% { transform: scale(.3); opacity: 1; } 100% { transform: scale(2.2); opacity: 0; } }
+
+.overlay { position: absolute; inset: 0; z-index: 20; display: grid; place-items: center; background: rgba(8, 12, 18, .6); backdrop-filter: blur(2px); }
+.box { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 12px; text-align: center; max-width: 86%; }
+.box h2 { margin: 0; font: 400 clamp(24px, 6cqw, 38px)/1.05 var(--font-display); text-wrap: balance; }
+.box p { margin: 0; color: var(--muted); font-size: 15px; text-wrap: pretty; }
+.prow { display: flex; gap: 8px; justify-content: center; }
+.prow button { width: 15cqw; max-width: 84px; aspect-ratio: 1; border-radius: 10px; border: 1px solid var(--line); background: var(--sq-light); display: grid; place-items: center; cursor: pointer; padding: 0; }
+.prow button:hover { border-color: var(--fg); }
+.prow .pc { font-size: 11cqw; }
+.toast {
+  position: absolute; left: 50%; top: 3%; z-index: 15; transform: translate(-50%, -14px); opacity: 0; pointer-events: none;
+  background: var(--fg); color: var(--bg); font: 600 14px/1.2 var(--font-body); padding: 9px 14px; border-radius: 999px; white-space: nowrap; max-width: 94%;
+  transition: opacity .2s, transform .2s;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+.toast.red { background: var(--mega); color: #fff; }
+
+/* online */
+.netline { margin: 0; font-size: 13px; font-weight: 600; color: var(--muted); display: flex; align-items: center; gap: 7px; }
+.netline::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
+.netline.ok::before { background: #1f9d55; }
+.netline.bad::before { background: var(--warn); }
+.lb { width: min(92%, 420px); max-width: none; }
+.lb > div { display: grid; gap: 12px; }
+.lb .or { color: var(--muted); font-size: 13px; }
+.joinrow { display: flex; gap: 8px; justify-content: center; }
+.joinrow input {
+  width: 8.5ch; font: 400 24px/1 var(--font-display); letter-spacing: .12em; text-align: center; text-transform: uppercase;
+  padding: 8px 6px; border-radius: 10px; border: 2px solid var(--line); background: var(--bg); color: var(--fg);
+}
+.joinrow input:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.codebig { font: 400 clamp(36px, 11cqw, 56px)/1 var(--font-display); letter-spacing: .18em; padding-left: .18em; color: var(--mega); }
+.btns.c { justify-content: center; }
+.btn.quiet { border-color: transparent; background: transparent; color: var(--muted); }
+.lbmsg { margin: 0; min-height: 1.2em; color: var(--mega); font-weight: 600; font-size: 14px; }
+/* black sees the board from their side */
+.board.flip .grid, .board.flip #megaLayer, .board.flip #fx { transform: rotate(180deg); }
+.board.flip .pc, .board.flip .lab, .board.flip .mega .g { transform: rotate(180deg); }
+.board.flip .cell.tsq .pc { animation-name: wobF; }
+.board.flip .overlay .pc { transform: none; } /* menus (e.g. promotion) are not rotated, so their pieces stay upright */
+@keyframes wobF { 0%, 100% { transform: rotate(174deg); } 50% { transform: rotate(186deg) scale(.94); } }
+
+/* side panels */
+h3 { margin: 0 0 8px; font: 400 18px/1 var(--font-display); letter-spacing: .02em; }
+.log { list-style: none; margin: 0; padding: 0; max-height: 180px; overflow: auto; display: grid; gap: 4px; font-size: 14px; font-variant-numeric: tabular-nums; }
+.log li { display: grid; grid-template-columns: 12px 22px 1fr; gap: 8px; align-items: center; }
+.log .empty { display: block; color: var(--muted); }
+.log .dot { width: 12px; height: 12px; border-width: 1.5px; }
+.rb { display: inline-grid; place-items: center; width: 22px; height: 20px; border-radius: 6px; background: var(--line); font-weight: 600; font-size: 12px; }
+.rb.six { background: var(--mega); color: #fff; }
+details summary { cursor: pointer; font: 400 18px/1 var(--font-display); letter-spacing: .02em; }
+details ul { margin: 10px 0 0; padding-left: 18px; display: grid; gap: 6px; font-size: 14px; }
+details b { color: var(--mega); font-weight: 600; }
+.opt { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; color: var(--muted); margin-top: 12px; }
+.opt input { margin-top: 3px; accent-color: var(--mega); }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+
+/* Footer links and info menus (Privacy policy, Credits) */
+.foot { max-width: 1040px; margin: 22px auto 0; padding-top: 14px; border-top: 1px solid var(--line); display: flex; gap: 22px; flex-wrap: wrap; justify-content: center; }
+.lnk { background: none; border: 0; padding: 8px 2px; font: inherit; font-size: 14px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; color: var(--fg); cursor: pointer; }
+.lnk:hover { color: var(--muted); }
+.lnk:focus-visible, .inf-x:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 6px; }
+.inf { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; padding: 14px; background: rgba(8, 12, 18, .62); backdrop-filter: blur(3px); }
+.inf[hidden] { display: none; }
+.inf-panel { width: min(100%, 560px); max-height: calc(100vh - 28px); max-height: calc(100dvh - 28px); overflow: auto; overscroll-behavior: contain; background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: 16px; padding: 18px; display: grid; gap: 16px; box-shadow: 0 18px 50px rgba(0, 0, 0, .4); }
+.inf-head { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; }
+.inf-head h2 { margin: 0 0 4px; font: 400 clamp(28px, 7vw, 36px)/1 var(--font-display); letter-spacing: .01em; }
+.inf-head p { margin: 0; color: var(--muted); font-size: 14px; text-wrap: pretty; }
+.inf-x { flex: none; width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); font-size: 16px; cursor: pointer; }
+.inf-sec { display: grid; gap: 6px; padding-top: 14px; border-top: 1px solid var(--line); }
+.inf-sec h3 { margin: 0; font-size: 15px; }
+.inf-sec p, .inf-sec li { margin: 0; font-size: 14px; line-height: 1.5; text-wrap: pretty; }
+.inf-sec ul { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
+.inf-empty { margin: 0; color: var(--muted); font-size: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+</style>
+
+<div class="app">
+  <header class="top">
+    <h1><span class="m">Mega</span> Knight Chess</h1>
+    <p class="sub">Move a piece or roll a D6 on your turn. A 6 lets you move the red Mega Knight, which both players share.</p>
+  </header>
+
+  <section class="card turn" aria-label="Turn">
+    <button class="die q" id="die" type="button" aria-label="Roll the die"></button>
+    <div class="turn-info">
+      <div class="chip"><span class="dot w" id="dot"></span><span id="turnName">White</span></div>
+      <p id="status" aria-live="polite"></p>
+      <p class="netline" id="netline" hidden></p>
+    </div>
+  </section>
+
+  <main class="stage">
+    <div class="board" id="board">
+      <div class="grid" id="grid" role="grid" aria-label="Chess board"></div>
+      <div class="layer" id="megaLayer"></div>
+      <div class="layer" id="fx"></div>
+      <div class="toast" id="toast" role="status"></div>
+      <div class="overlay" id="promo" hidden>
+        <div class="box"><h2>Promote your pawn</h2><div class="prow" id="promoRow"></div></div>
+      </div>
+      <div class="overlay" id="lobby" hidden>
+        <div class="box lb">
+          <div id="lbMenu">
+            <h2>Play online</h2>
+            <p>Private 1v1 over the internet, from any two networks. One player creates a match and shares the code.</p>
+            <button class="btn danger" id="mkCreate" type="button">Create private match</button>
+            <div class="or">or join a friend</div>
+            <div class="joinrow"><input id="joinCode" maxlength="5" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="CODE" aria-label="Match code"><button class="btn" id="mkJoin" type="button">Join</button></div>
+            <button class="btn quiet" id="lbClose" type="button">Back to local game</button>
+          </div>
+          <div id="lbWait" hidden>
+            <h2>Share this code</h2>
+            <div class="codebig" id="codeBig" aria-live="polite"></div>
+            <p id="lbWaitText">Waiting for your opponent to join…</p>
+            <div class="btns c">
+              <button class="btn" id="copyCode" type="button">Copy code</button>
+              <button class="btn" id="copyLink" type="button" hidden>Copy invite link</button>
+              <button class="btn" id="shareBtn" type="button" hidden>Share</button>
+            </div>
+            <button class="btn quiet" id="lbCancel" type="button">Cancel</button>
+          </div>
+          <div id="lbBusy" hidden>
+            <h2 id="lbBusyTitle">Connecting…</h2>
+            <button class="btn quiet" id="lbCancel2" type="button">Cancel</button>
+          </div>
+          <p class="lbmsg" id="lbMsg" role="alert"></p>
+        </div>
+      </div>
+      <div class="overlay" id="end" hidden>
+        <div class="box"><h2 id="endTitle"></h2><p id="endText"></p><button class="btn danger" id="again" type="button">Play again</button></div>
+      </div>
+    </div>
+  </main>
+
+  <div class="rest">
+    <section class="card">
+      <h3>Moves</h3>
+      <ol class="log" id="log"></ol>
+    </section>
+    <details class="card">
+      <summary>Rules</summary>
+      <ul>
+        <li>On your turn you may <b>move a normal piece</b> straight away by regular chess rules, or <b>roll the D6</b> instead.</li>
+        <li>If you roll <b>1 to 5</b> you move a normal piece. If you roll a <b>6</b> you choose: move a Mega Knight, Giga Knight or a normal piece. If you can do neither, your turn is lost.</li>
+        <li>A Mega Knight starts in the center. It is red, neutral, and fills a 2x2 block. It leaps like a knight: moving 2 vertices in one direction, and 1 vortex left or right.</li>
+        <li>It crushes every enemy piece on the 4 squares it lands on, kings included. Crushing a king wins at once.</li>
+        <li>It cannot land on your own pieces. It can capture another Mega Knight only by landing exactly on top of it (a full 2x2 overlap); a partial overlap is not allowed. Normal pieces cannot capture it or pass through it.</li>
+        <li>Four Knights of any colors in a 2x2 block merge into a new Mega Knight. There is no limit.</li>
+        <li>Four Mega Knights in a 4x4 block merge into a light blue <b>Giga Knight</b>, a 3x3 piece. It moves like a shorter knight: 1 square away from it's middle (main) piece, and 1 square left or right, so it can overlap its own old position.</li>
+        <li><b>Online:</b> tap <i>Play online</i>, create a private match and send the code (or invite link) to your opponent. The creator plays White first; sides swap each new game.</li>
+        <li>Check applies to normal pieces. If you roll 1 to 5, are in check and have no legal move, you are checkmated.</li>
+      </ul>
+    </details>
+    <div class="actions">
+      <button class="btn" id="newBtn" type="button">New game</button>
+      <button class="btn" id="playOnline" type="button">Play online</button>
+      <button class="btn" id="leaveBtn" type="button" hidden>Leave match</button>
+    </div>
+  </div>
+</div>
+
+<footer class="foot" id="foot">
+  <button class="lnk" id="ppBtn" type="button" aria-haspopup="dialog">Privacy policy</button>
+  <button class="lnk" id="crBtn" type="button" aria-haspopup="dialog">Credits</button>
+</footer>
+
+<div class="inf" id="ppMenu" hidden>
+  <div class="inf-panel" role="dialog" aria-modal="true" aria-labelledby="ppTitle">
+    <div class="inf-head">
+      <div>
+        <h2 id="ppTitle">Privacy policy</h2>
+        <p>Mega Knight Chess does not operate its own analytics or advertising system. However, the website's hosting provider and third-party services used for fonts and online multiplayer may process technical information, including IP addresses. This policy explains what happens.</p>
+      </div>
+      <button class="inf-x" type="button" data-close aria-label="Close menu">&#10005;</button>
+    </div>
+    <section class="inf-sec">
+      <h3>What the game collects</h3>
+      <p>Nothing. There are no accounts, names, emails, analytics, advertising, cookies or trackers, and the game's creator runs no server and receives no data from you. Playing on one device never sends anything anywhere.</p>
+    </section>
+    <section class="inf-sec">
+      <h3>What is saved on your device</h3>
+      <p>The game stores a random reconnection token in your browser's local storage. Online play also uses a match code to help establish the connection between players. The match code and connection information may be processed by the multiplayer services described below.</p>
+    </section>
+    <section class="inf-sec">
+      <h3>Online matches</h3>
+      <p>Online play connects the two devices directly (peer to peer). Only dice rolls and moves are sent, with no names, chat or other personal details. To set up the connection, third-party services see your IP address and the match's random code:</p>
+      <ul>
+        <li><b>PeerJS signaling server</b> (0.peerjs.com) helps the two devices find each other.</li>
+        <li><b>STUN servers</b> (Google and Cloudflare) tell your device its public address.</li>
+        <li><b>TURN relay</b> (openrelay.metered.ca, by Metered) passes your encrypted game traffic along only when no direct route exists.</li>
+      </ul>
+      <p>Your opponent's device also receives your IP address, as with any direct connection. Only share a match code with someone you trust, because anyone who has the code can join.</p>
+    </section>
+    <section class="inf-sec">
+      <h3>Other things loaded from the internet</h3>
+      <ul>
+        <li><b>Google Fonts</b> loads the game's fonts when the page opens, so Google receives your IP address and browser details.</li>
+        <li><b>PeerJS library</b> is fetched from a public CDN (jsDelivr, unpkg or cdnjs) the first time you play online.</li>
+        <li>If you open the game from a website such as GitHub Pages, that host may keep ordinary access logs.</li>
+      </ul>
+      <p>These services have their own privacy policies, which the game does not control.</p>
+    </section>
+    <section class="inf-sec">
+      <h3>Children and changes</h3>
+      <p>The game does not knowingly collect information from anyone, including children. If this policy changes, the new version will appear in this menu.</p>
+    </section>
+    <section class="inf-sec">
+      <h3>Contact</h3>
+      <p>For questions about this privacy policy or the game's handling of data, contact: example@gmail.com.</p>
+      <p><b>Last updated:</b> 18 October 2026.</p>
+    </section>
+  </div>
+</div>
+
+<div class="inf" id="crMenu" hidden>
+  <div class="inf-panel" role="dialog" aria-modal="true" aria-labelledby="crTitle">
+    <div class="inf-head">
+      <div><h2 id="crTitle">Credits</h2></div>
+      <button class="inf-x" type="button" data-close aria-label="Close menu">&#10005;</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+'use strict';
+/*ENGINE_START*/
+const inB = (r, c) => r >= 0 && r < 8 && c >= 0 && c < 8;
+const opp = c => (c === 'w' ? 'b' : 'w');
+const KN = [[1, 2], [2, 1], [-1, 2], [-2, 1], [1, -2], [2, -1], [-1, -2], [-2, -1]];
+const KD = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+const RD = KD.slice(0, 4), BD = KD.slice(4);
+const MD = KN;
+const GD = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
+
+function findKing(b, color) {
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) { const p = b[r][c]; if (p && p.t === 'k' && p.c === color) return [r, c]; }
+  return null;
+}
+function attacked(b, r, c, by) {
+  const pr = by === 'w' ? r + 1 : r - 1;
+  for (const dc of [-1, 1]) { const p = b[pr] && b[pr][c + dc]; if (p && p.c === by && p.t === 'p') return true; }
+  for (const [a, d] of KN) { const p = b[r + a] && b[r + a][c + d]; if (p && p.c === by && p.t === 'n') return true; }
+  for (const [a, d] of KD) { const p = b[r + a] && b[r + a][c + d]; if (p && p.c === by && p.t === 'k') return true; }
+  for (const [dr, dc] of RD) {
+    let y = r + dr, x = c + dc;
+    while (inB(y, x)) { const p = b[y][x]; if (p) { if (p.c === by && (p.t === 'r' || p.t === 'q')) return true; break; } y += dr; x += dc; }
+  }
+  for (const [dr, dc] of BD) {
+    let y = r + dr, x = c + dc;
+    while (inB(y, x)) { const p = b[y][x]; if (p) { if (p.c === by && (p.t === 'b' || p.t === 'q')) return true; break; } y += dr; x += dc; }
+  }
+  return false;
+}
+function gen(b, color, ep) {
+  const out = [], o = opp(color);
+  const add = (fr, fc, tr, tc, x) => out.push(Object.assign({ fr, fc, tr, tc }, x || {}));
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    const p = b[r][c];
+    if (!p || p.c !== color) continue;
+    if (p.t === 'p') {
+      const d = color === 'w' ? -1 : 1, start = color === 'w' ? 6 : 1, last = color === 'w' ? 0 : 7;
+      if (inB(r + d, c) && !b[r + d][c]) {
+        add(r, c, r + d, c, { promo: r + d === last });
+        if (r === start && !b[r + 2 * d][c]) add(r, c, r + 2 * d, c, { dbl: true });
+      }
+      for (const dc of [-1, 1]) {
+        const tr = r + d, tc = c + dc;
+        if (!inB(tr, tc)) continue;
+        const q = b[tr][tc];
+        if (q && q.c === o) add(r, c, tr, tc, { promo: tr === last, cap: true });
+        else if (!q && ep && ep.r === tr && ep.c === tc) add(r, c, tr, tc, { ep: true, cap: true });
+      }
+    } else if (p.t === 'n' || p.t === 'k') {
+      for (const [a, d] of (p.t === 'n' ? KN : KD)) {
+        const tr = r + a, tc = c + d;
+        if (!inB(tr, tc)) continue;
+        const q = b[tr][tc];
+        if (!q || q.c === o) add(r, c, tr, tc, { cap: !!q });
+      }
+      if (p.t === 'k' && !p.m && c === 4 && r === (color === 'w' ? 7 : 0) && !attacked(b, r, 4, o)) {
+        const rk = b[r][7];
+        if (rk && rk.t === 'r' && rk.c === color && !rk.m && !b[r][5] && !b[r][6] && !attacked(b, r, 5, o) && !attacked(b, r, 6, o)) add(r, 4, r, 6, { castle: true });
+        const rq = b[r][0];
+        if (rq && rq.t === 'r' && rq.c === color && !rq.m && !b[r][1] && !b[r][2] && !b[r][3] && !attacked(b, r, 3, o) && !attacked(b, r, 2, o)) add(r, 4, r, 2, { castle: true });
+      }
+    } else {
+      const dirs = p.t === 'r' ? RD : p.t === 'b' ? BD : KD;
+      for (const [dr, dc] of dirs) {
+        let y = r + dr, x = c + dc;
+        while (inB(y, x)) {
+          const q = b[y][x];
+          if (!q) add(r, c, y, x);
+          else { if (q.c === o) add(r, c, y, x, { cap: true }); break; }
+          y += dr; x += dc;
+        }
+      }
+    }
+  }
+  return out;
+}
+function applyCopy(b, m, promo) {
+  const nb = b.map(r => r.slice());
+  const p = nb[m.fr][m.fc];
+  const np = { t: m.promo ? (promo || 'q') : p.t, c: p.c, m: true };
+  nb[m.fr][m.fc] = null;
+  if (m.ep) nb[m.fr][m.tc] = null;
+  nb[m.tr][m.tc] = np;
+  if (m.castle) {
+    const k = m.tc === 6;
+    nb[m.fr][k ? 7 : 0] = null;
+    nb[m.fr][k ? 5 : 3] = { t: 'r', c: p.c, m: true };
+  }
+  return nb;
+}
+function legalFor(b, color, ep) {
+  return gen(b, color, ep).filter(m => {
+    const nb = applyCopy(b, m, 'q');
+    const k = findKing(nb, color);
+    return !k || !attacked(nb, k[0], k[1], opp(color));
+  });
+}
+function inCheck(b, color) {
+  const k = findKing(b, color);
+  return !!k && attacked(b, k[0], k[1], opp(color));
+}
+function megasOn(b) {
+  const out = [];
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) { const p = b[r][c]; if (p && p.t === 'M' && p.ar === r && p.ac === c) out.push(p); }
+  return out;
+}
+function megaMoves(b, mg, color) {
+  const out = [], s = mg.s || 2;
+  for (const [dr, dc] of (s === 3 ? GD : MD)) {
+    const nr = mg.ar + dr, nc = mg.ac + dc;
+    if (nr < 0 || nr > 8 - s || nc < 0 || nc > 8 - s) continue;
+    let ok = true, crushed = 0, hitMega = false;
+    for (let i = 0; i < s && ok; i++) for (let j = 0; j < s; j++) {
+      const q = b[nr + i][nc + j];
+      if (!q || q.id === mg.id && q.t === 'M') continue;
+      if (q.t === 'M') {
+        // Only a perfect overlap of a same-size Mega/Giga Knight captures it.
+        if (q.s !== s || q.ar !== nr || q.ac !== nc) { ok = false; break; }
+        if (!hitMega) { hitMega = true; crushed++; }
+      } else if (q.c === color) { ok = false; break; }
+      else crushed++;
+    }
+    if (ok) out.push({ nr, nc, crushed, s });
+  }
+  return out;
+}
+function mergeKnights(b, startId) {
+  const isN = p => p && p.t === 'n';
+  const isM2 = (r, c) => { const p = b[r][c]; return !!p && p.t === 'M' && p.s === 2 && p.ar === r && p.ac === c; };
+  const made = []; let id = startId;
+  for (;;) {
+    let hit = null, giga = null;
+    scan: for (let r = 0; r < 7; r++) for (let c = 0; c < 7; c++) {
+      if (isN(b[r][c]) && isN(b[r][c + 1]) && isN(b[r + 1][c]) && isN(b[r + 1][c + 1])) { hit = [r, c]; break scan; }
+    }
+    if (hit) {
+      const mg = { t: 'M', c: 'x', id: id++, ar: hit[0], ac: hit[1], s: 2 };
+      for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) b[hit[0] + i][hit[1] + j] = mg;
+      made.push(mg);
+      continue;
+    }
+    // Four Mega Knights in a 2x2 arrangement (a 4x4 area) merge into a 3x3 Giga Knight.
+    scan2: for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
+      if (isM2(r, c) && isM2(r, c + 2) && isM2(r + 2, c) && isM2(r + 2, c + 2)) { giga = [r, c]; break scan2; }
+    }
+    if (!giga) break;
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) b[giga[0] + i][giga[1] + j] = null;
+    const gk = { t: 'M', c: 'x', id: id++, ar: giga[0], ac: giga[1], s: 3 };
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) b[giga[0] + i][giga[1] + j] = gk;
+    made.push(gk);
+  }
+  return { made, nextId: id };
+}
+/*ENGINE_END*/
+
+const $ = s => document.querySelector(s);
+const FILES = 'abcdefgh';
+const NAME = { w: 'White', b: 'Black' };
+const PN = { k: 'king', q: 'queen', r: 'rook', b: 'bishop', n: 'knight', p: 'pawn' };
+const GL = { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' };
+const VS = '︎';
+const sq = (r, c) => FILES[c] + (8 - r);
+const grid = $('#grid'), board = $('#board'), layer = $('#megaLayer'), fx = $('#fx'), toastEl = $('#toast'), dieEl = $('#die');
+const domMegas = new Map();
+const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
+let G = null, cur = [7, 4], resetTimer = null, toastTimer = null;
+// Online play state. `host` rolls the dice for both players; `color` is the side this device plays.
+const net = { on: false, host: false, color: 'w', peer: null, conn: null, code: '', token: '', guestToken: null,
+              status: 'idle', waitRoll: false, queue: [], lastSeen: 0, hb: null, retry: null, cancel: 0, stall: 0 };
+
+function newGame() {
+  const b = Array.from({ length: 8 }, () => Array(8).fill(null));
+  const back = 'rnbqkbnr';
+  for (let c = 0; c < 8; c++) {
+    b[0][c] = { t: back[c], c: 'b', m: false }; b[1][c] = { t: 'p', c: 'b', m: false };
+    b[6][c] = { t: 'p', c: 'w', m: false }; b[7][c] = { t: back[c], c: 'w', m: false };
+  }
+  const start = { t: 'M', c: 'x', id: 1, ar: 3, ac: 3, s: 2 };
+  for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) b[3 + i][3 + j] = start;
+  G = { board: b, drawBoard: null, turn: 'w', phase: 'roll', roll: null, mode: 'normal', nextId: 2, ep: null, over: null,
+        last: null, log: [], sel: null, targets: [], legal: legalFor(b, 'w', null), canPass: false, msg: 'White, move a piece or roll the die.',
+        rolling: false, busy: false, pending: null, turnNo: 1 };
+}
+
+function toast(text, red) {
+  toastEl.textContent = text; toastEl.classList.toggle('red', !!red); toastEl.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2200);
+}
+function boom(r, c, big, s) {
+  const el = document.createElement('div');
+  el.className = 'boom' + (big ? '' : ' small') + (s === 3 ? ' giga' : '');
+  el.style.left = c * 12.5 + '%'; el.style.top = r * 12.5 + '%';
+  if (s === 3) { el.style.width = el.style.height = '37.5%'; }
+  fx.appendChild(el); setTimeout(() => el.remove(), 1000);
+  if (big) { board.classList.remove('shake'); void board.offsetWidth; board.classList.add('shake'); }
+}
+function pushLog(text) { G.log.push({ who: G.turn, roll: G.roll, text }); }
+
+function drawDie(v) {
+  let h = '';
+  const on = new Set(PIPS[v] || []);
+  for (let i = 0; i < 9; i++) h += '<i class="pip' + (on.has(i) ? ' on' : '') + '"></i>';
+  dieEl.innerHTML = h;
+  dieEl.classList.toggle('q', !v);
+  dieEl.classList.toggle('six', v === 6);
+}
+
+function endTurn() {
+  const nx = opp(G.turn);
+  G.turn = nx; G.turnNo++; G.phase = 'roll'; G.mode = 'normal'; G.roll = null;
+  G.sel = null; G.targets = []; G.legal = legalFor(G.board, nx, G.ep); G.canPass = false; G.pending = null;
+  let material = false;
+  for (const row of G.board) for (const p of row) if (p && p.t !== 'k') material = true;
+  if (!material) {
+    G.over = { winner: null, title: 'Draw', text: 'Only the kings are left.' }; G.phase = 'over'; G.mode = null; G.msg = 'Draw. Only the kings are left.';
+  } else if (inCheck(G.board, nx)) {
+    G.msg = NAME[nx] + ' is in check. Move a piece or roll the die.'; toast('Check');
+  } else {
+    G.msg = NAME[nx] + ', move a piece or roll the die.';
+  }
+  render();
+}
+
+const d6 = () => 1 + Math.floor(Math.random() * 6);
+function rollDie() {
+  if (G.phase !== 'roll' || G.rolling || G.busy || G.over) return;
+  if (net.on) {
+    if (G.turn !== net.color || net.status !== 'connected' || net.waitRoll) return;
+    if (net.host) { const v = d6(); netSend({ k: 'roll', v }); startRoll(v); }
+    else {
+      // The host rolls for both players so nobody can fake a 6.
+      net.waitRoll = true; netSend({ k: 'rollreq' }); render();
+      clearTimeout(net.rollT); net.rollT = setTimeout(() => { net.waitRoll = false; render(); }, 6000);
+    }
+    return;
+  }
+  startRoll(d6());
+}
+function startRoll(v) {
+  net.waitRoll = false; clearTimeout(net.rollT);
+  G.rolling = true; dieEl.classList.add('rolling'); render();
+  let n = 0;
+  const iv = setInterval(() => {
+    drawDie(d6());
+    if (++n >= 9) { clearInterval(iv); dieEl.classList.remove('rolling'); resolveRoll(v); }
+  }, 75);
+}
+
+function resolveRoll(v) {
+  const me = G.turn;
+  G.rolling = false; G.roll = v; G.sel = null; G.targets = []; G.legal = []; G.canPass = false;
+  const megas = megasOn(G.board);
+  const movable = megas.filter(m => megaMoves(G.board, m, me).length);
+  G.legal = legalFor(G.board, me, G.ep);
+  if (v === 6) {
+    G.phase = 'move'; G.canPass = false;
+    if (movable.length) {
+      G.mode = 'mega';
+      G.msg = NAME[me] + ' rolled a 6. Move a Mega Knight' + (movable.length > 1 ? ' (tap the one you want)' : '') + (G.legal.length ? ' or a normal piece.' : '.');
+      if (movable.length === 1) { G.sel = { id: movable[0].id }; G.targets = megaMoves(G.board, movable[0], me); }
+    } else if (G.legal.length) {
+      G.mode = 'normal';
+      G.msg = NAME[me] + ' rolled a 6, but no Mega Knight can move. Move a piece.';
+    } else {
+      G.mode = 'stuck';
+      G.msg = NAME[me] + ' rolled a 6 and has no move. Turn lost.';
+      loseTurn(); return;
+    }
+    render(); return;
+  }
+  if (!G.legal.length) {
+    if (inCheck(G.board, me)) {
+      G.over = { winner: opp(me), title: NAME[opp(me)] + ' wins', text: NAME[me] + ' rolled a ' + v + ' and has no way out of check. Checkmate.' };
+      G.phase = 'over'; G.mode = null; G.msg = 'Checkmate. ' + NAME[opp(me)] + ' wins.';
+    } else if (!megas.length) {
+      G.over = { winner: null, title: 'Draw', text: NAME[me] + ' has no legal move. Stalemate.' };
+      G.phase = 'over'; G.mode = null; G.msg = 'Stalemate. The game is a draw.';
+    } else {
+      G.mode = 'stuck'; G.phase = 'move'; G.canPass = false; G.msg = NAME[me] + ' rolled a ' + v + ' and has no legal move. Turn lost.';
+      loseTurn(); return;
+    }
+    render(); return;
+  }
+  G.mode = 'normal'; G.phase = 'move';
+  G.msg = NAME[me] + ' rolled a ' + v + '. Move a piece.';
+  render();
+}
+
+function loseTurn() {
+  G.busy = true; render();
+  setTimeout(() => { G.busy = false; pushLog('turn lost'); endTurn(); }, 1500);
+}
+
+function onCell(r, c) {
+  if ((G.phase !== 'move' && G.phase !== 'roll') || G.rolling || G.busy || G.over) return;
+  if (net.on && (G.turn !== net.color || net.status !== 'connected')) return;
+  const b = G.board;
+  const six = G.phase === 'move' && G.roll === 6;
+  if (G.mode === 'normal' && G.sel) {
+    const ms = G.targets.filter(m => m.tr === r && m.tc === c);
+    if (ms.length) { attempt(ms[0]); return; }
+  } else if (G.mode === 'mega' && G.sel) {
+    const hits = G.targets.filter(t => r >= t.nr && r <= t.nr + t.s - 1 && c >= t.nc && c <= t.nc + t.s - 1);
+    if (hits.length) {
+      // When landing spots overlap, take the one whose centre is closest to the tapped square.
+      const d = t => (r - (t.nr + (t.s - 1) / 2)) ** 2 + (c - (t.nc + (t.s - 1) / 2)) ** 2;
+      hits.sort((a, b2) => d(a) - d(b2));
+      if (hits.length === 1 || d(hits[0]) < d(hits[1])) { doMega(G.sel.id, hits[0]); return; }
+      toast('Two landing spots share that square. Tap another square of the one you want.'); return;
+    }
+  }
+  const cell = b[r][c];
+  if (six && cell && cell.t === 'M') {
+    const mv = megaMoves(b, cell, G.turn);
+    G.mode = 'mega';
+    if (mv.length) { G.sel = { id: cell.id }; G.targets = mv; } else { G.sel = null; G.targets = []; }
+  } else if (cell && cell.t !== 'M' && cell.c === G.turn && G.legal.some(m => m.fr === r && m.fc === c)) {
+    G.mode = 'normal'; G.sel = { r, c }; G.targets = G.legal.filter(m => m.fr === r && m.fc === c);
+  } else { G.sel = null; G.targets = []; }
+  render();
+}
+
+function attempt(m) {
+  if (m.promo) { G.pending = m; G.phase = 'promo'; G.targets = []; render(); return; }
+  doNormal(m, null);
+}
+function choosePromo(t) {
+  const m = G.pending; if (!m) return;
+  G.pending = null; G.phase = 'move'; doNormal(m, t);
+}
+
+function doNormal(m, promo, fromNet) {
+  if (!fromNet) netSend({ k: 'n', m: { fr: m.fr, fc: m.fc, tr: m.tr, tc: m.tc }, promo: promo || null });
+  const b = G.board, p = b[m.fr][m.fc];
+  const cap = m.ep || !!b[m.tr][m.tc];
+  let txt;
+  if (m.castle) txt = m.tc === 6 ? 'O-O' : 'O-O-O';
+  else txt = (p.t === 'p' ? '' : p.t.toUpperCase()) + sq(m.fr, m.fc) + (cap ? 'x' : '-') + sq(m.tr, m.tc) + (promo ? '=' + promo.toUpperCase() : '');
+  const nb = applyCopy(b, m, promo);
+  const mr = mergeKnights(nb, G.nextId);
+  G.nextId = mr.nextId; G.board = nb;
+  G.ep = m.dbl ? { r: (m.fr + m.tr) / 2, c: m.fc } : null;
+  G.last = [[m.fr, m.fc], [m.tr, m.tc]];
+  pushLog(txt + announceMerge(mr.made));
+  endTurn();
+}
+function announceMerge(made) {
+  if (!made.length) return '';
+  const gigas = made.filter(g => g.s === 3).length;
+  made.forEach(g => boom(g.ar, g.ac, false, g.s));
+  if (gigas) toast(gigas > 1 ? gigas + ' Giga Knights rise!' : 'Four Mega Knights merge into a Giga Knight!', true);
+  else toast(made.length > 1 ? made.length + ' Mega Knights rise!' : 'Four Knights merge into a Mega Knight!', true);
+  return gigas ? '  Giga Knight!' : '  Mega Knight!';
+}
+
+function doMega(id, t, fromNet) {
+  if (!fromNet) netSend({ k: 'm', id, nr: t.nr, nc: t.nc });
+  const me = G.turn, old = G.board;
+  const mg = megasOn(old).find(x => x.id === id);
+  const nb = old.map(r => r.slice());
+  const s = mg.s;
+  for (let i = 0; i < s; i++) for (let j = 0; j < s; j++) nb[mg.ar + i][mg.ac + j] = null;
+  const crushed = [];
+  for (let i = 0; i < s; i++) for (let j = 0; j < s; j++) {
+    const q = nb[t.nr + i][t.nc + j];
+    if (q && !crushed.includes(q)) crushed.push(q);
+  }
+  const nm = { t: 'M', c: 'x', id, ar: t.nr, ac: t.nc, s };
+  for (let i = 0; i < s; i++) for (let j = 0; j < s; j++) nb[t.nr + i][t.nc + j] = nm;
+  const from = sq(mg.ar, mg.ac);
+  G.busy = true; G.drawBoard = old; G.board = nb; G.sel = null; G.targets = []; G.ep = null;
+  const el = domMegas.get(id);
+  if (el) { el.classList.add('hop'); setTimeout(() => el.classList.remove('hop'), 600); }
+  render();
+  setTimeout(() => {
+    G.drawBoard = null; G.busy = false;
+    G.last = [];
+    for (let i = 0; i < s; i++) for (let j = 0; j < s; j++) G.last.push([t.nr + i, t.nc + j]);
+    boom(t.nr, t.nc, true, s);
+    const kind = s === 3 ? 'Giga' : 'Mega';
+    pushLog(kind + ' ' + from + '-' + sq(t.nr, t.nc) + (crushed.length ? ' crushes ' + crushed.length : ''));
+    if (crushed.some(q => q.t === 'k')) {
+      G.over = { winner: me, title: NAME[me] + ' wins', text: 'The ' + kind + ' Knight crushed the ' + NAME[opp(me)].toLowerCase() + ' king. Checkmate.' };
+      G.phase = 'over'; G.mode = null; G.canPass = false; G.msg = 'The ' + kind + ' Knight crushed the king. ' + NAME[me] + ' wins.';
+      toast('King crushed', true); render(); return;
+    }
+    if (crushed.length) toast(crushed.length === 1 ? 'Crushed 1 piece' : 'Crushed ' + crushed.length + ' pieces', true);
+    // Mega Knights that end up in a 2x2 arrangement merge into a Giga Knight.
+    const mr = mergeKnights(G.board, G.nextId);
+    G.nextId = mr.nextId;
+    if (mr.made.length) G.log[G.log.length - 1].text += announceMerge(mr.made);
+    endTurn();
+  }, 520);
+}
+
+function render() {
+  board.classList.toggle('flip', net.on && net.color === 'b');
+  const vis = G.drawBoard || G.board, me = G.turn;
+  const act = document.activeElement;
+  const hadFocus = !!(act && act.classList && act.classList.contains('cell') && grid.contains(act));
+  const nt = new Map(), mt = new Map();
+  const lastSet = new Set(G.last ? G.last.map(x => x[0] * 8 + x[1]) : []);
+  if (G.mode === 'normal') for (const m of G.targets) nt.set(m.tr * 8 + m.tc, m.cap ? 'tcap' : 'tmove');
+  if (G.mode === 'mega' && G.sel) for (const t of G.targets) for (let i = 0; i < t.s; i++) for (let j = 0; j < t.s; j++) {
+    const k = (t.nr + i) * 8 + t.nc + j, o = mt.get(k) || { sq: false, e: new Set(), g: t.s === 3 };
+    const q = G.board[t.nr + i][t.nc + j];
+    if (q && !(q.t === 'M' && q.id === G.sel.id)) o.sq = true;
+    if (i === 0) o.e.add('e-t'); if (i === t.s - 1) o.e.add('e-b');
+    if (j === 0) o.e.add('e-l'); if (j === t.s - 1) o.e.add('e-r');
+    mt.set(k, o);
+  }
+  const kp = (G.phase !== 'over' && !G.busy) ? (inCheck(G.board, me) ? findKing(G.board, me) : null) : null;
+  let h = '';
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    const p = vis[r][c], k = r * 8 + c, cls = ['cell'];
+    if ((r + c) % 2) cls.push('dark');
+    if (lastSet.has(k)) cls.push('last');
+    if (G.mode === 'normal' && G.sel && G.sel.r === r && G.sel.c === c) cls.push('sel');
+    if (kp && kp[0] === r && kp[1] === c) cls.push('chk');
+    if (nt.has(k)) cls.push(nt.get(k));
+    if (mt.has(k)) { const o = mt.get(k); cls.push('tm', ...o.e); if (o.g) cls.push('tg'); if (o.sq) cls.push('tsq'); }
+    let inner = '', label = sq(r, c);
+    if (c === 0) inner += '<span class="lab rk">' + (8 - r) + '</span>';
+    if (r === 7) inner += '<span class="lab fl">' + FILES[c] + '</span>';
+    if (p && p.t !== 'M') { inner += '<span class="pc ' + p.c + '">' + GL[p.t] + VS + '</span>'; label += ', ' + NAME[p.c].toLowerCase() + ' ' + PN[p.t]; }
+    else if (p) label += p.s === 3 ? ', Giga Knight' : ', Mega Knight';
+    h += '<button type="button" class="' + cls.join(' ') + '" data-r="' + r + '" data-c="' + c + '" tabindex="' + (r === cur[0] && c === cur[1] ? 0 : -1) + '" aria-label="' + label + '">' + inner + '</button>';
+  }
+  grid.innerHTML = h;
+  if (hadFocus) { const el = grid.querySelector('[data-r="' + cur[0] + '"][data-c="' + cur[1] + '"]'); if (el) el.focus({ preventScroll: true }); }
+  renderMegas();
+  renderPanel();
+}
+
+function renderMegas() {
+  const ms = megasOn(G.board), ids = new Set(ms.map(m => m.id));
+  for (const [id, el] of domMegas) if (!ids.has(id)) { el.remove(); domMegas.delete(id); }
+  const ready = (G.roll === 6 && G.phase === 'move' && !G.busy)
+    ? new Set(ms.filter(m => megaMoves(G.board, m, G.turn).length).map(m => m.id)) : new Set();
+  for (const m of ms) {
+    let el = domMegas.get(m.id);
+    if (!el) {
+      el = document.createElement('div'); el.className = 'mega' + (m.s === 3 ? ' giga' : '');
+      el.style.width = el.style.height = m.s * 12.5 + '%';
+      el.innerHTML = '<div class="body"><span class="g">♞' + VS + '</span></div>';
+      el.style.left = m.ac * 12.5 + '%'; el.style.top = m.ar * 12.5 + '%';
+      layer.appendChild(el); domMegas.set(m.id, el);
+      el.classList.add('spawn'); setTimeout(() => el.classList.remove('spawn'), 900);
+    } else { el.style.left = m.ac * 12.5 + '%'; el.style.top = m.ar * 12.5 + '%'; }
+    const sel = !!(G.sel && G.sel.id === m.id);
+    el.classList.toggle('sel', sel);
+    el.classList.toggle('ready', ready.has(m.id) && !sel);
+  }
+}
+
+function renderPanel() {
+  const me = G.turn;
+  $('#turnName').textContent = G.over ? 'Game over' : NAME[me] + (net.on ? (me === net.color ? ' (you)' : ' (opponent)') : '');
+  $('#dot').className = 'dot' + (G.over ? '' : ' ' + me);
+  let st = G.msg;
+  const nl = $('#netline');
+  nl.hidden = !net.on;
+  if (net.on) {
+    const ok = net.status === 'connected';
+    nl.className = 'netline ' + (ok ? 'ok' : 'bad');
+    nl.textContent = ok ? 'Online · Room ' + net.code + ' · You are ' + NAME[net.color]
+      : net.status === 'waiting' ? 'Room ' + net.code + ' · waiting for opponent'
+      : net.host ? 'Room ' + net.code + ' · opponent disconnected' : 'Connection lost · reconnecting to room ' + net.code + '…';
+    if (!G.over) {
+      if (!ok) st = net.status === 'waiting' ? 'Waiting for your opponent to join.' : net.host ? 'Your opponent disconnected. Waiting for them to rejoin.' : 'Connection lost. Trying to reconnect…';
+      else if (G.turn !== net.color && G.phase === 'roll') st = 'Waiting for ' + NAME[G.turn] + ' to move or roll…';
+      else if (net.waitRoll) st = 'Rolling…';
+    }
+  }
+  $('#status').textContent = st;
+  $('#playOnline').hidden = net.on;
+  $('#leaveBtn').hidden = !net.on;
+  if (!G.rolling) drawDie(G.phase === 'roll' ? 0 : (G.roll || 0));
+  const canRoll = G.phase === 'roll' && !G.rolling && !G.busy && (!net.on || (G.turn === net.color && net.status === 'connected' && !net.waitRoll));
+  dieEl.disabled = !canRoll;
+  dieEl.classList.toggle('ready', canRoll);
+  const log = $('#log');
+  if (!G.log.length) log.innerHTML = '<li class="empty">No moves yet.</li>';
+  else {
+    log.innerHTML = G.log.map(e => '<li><span class="dot ' + e.who + '"></span><span class="rb' + (e.roll === 6 ? ' six' : '') + '">' + (e.roll || '') + '</span><span>' + e.text + '</span></li>').join('');
+    log.scrollTop = log.scrollHeight;
+  }
+  const pr = $('#promo');
+  pr.hidden = G.phase !== 'promo';
+  if (G.phase === 'promo') {
+    $('#promoRow').innerHTML = ['q', 'r', 'b', 'n'].map(t => '<button type="button" data-p="' + t + '" aria-label="Promote to ' + PN[t] + '"><span class="pc ' + me + '">' + GL[t] + VS + '</span></button>').join('');
+  }
+  $('#end').hidden = !G.over;
+  if (G.over) { $('#endTitle').textContent = G.over.title; $('#endText').textContent = G.over.text; }
+}
+
+grid.addEventListener('click', e => {
+  const t = e.target.closest('.cell'); if (!t) return;
+  onCell(+t.dataset.r, +t.dataset.c);
+});
+grid.addEventListener('focusin', e => {
+  const t = e.target.closest('.cell'); if (t) cur = [+t.dataset.r, +t.dataset.c];
+});
+grid.addEventListener('keydown', e => {
+  const d = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] }[e.key];
+  if (!d) return;
+  e.preventDefault();
+  const r = Math.max(0, Math.min(7, cur[0] + d[0])), c = Math.max(0, Math.min(7, cur[1] + d[1]));
+  const old = grid.querySelector('[tabindex="0"]'); if (old) old.tabIndex = -1;
+  const el = grid.querySelector('[data-r="' + r + '"][data-c="' + c + '"]');
+  if (el) { el.tabIndex = 0; el.focus(); }
+});
+$('#promoRow').addEventListener('click', e => { const b = e.target.closest('button'); if (b) choosePromo(b.dataset.p); });
+dieEl.addEventListener('click', rollDie);
+function startNew() {
+  if (net.on) {
+    if (net.status !== 'connected') { toast('Not connected to your opponent'); return; }
+    net.color = opp(net.color); // sides swap every game
+    netSend({ k: 'new' });
+    newGame(); render(); toast('New game: you are ' + NAME[net.color]);
+    return;
+  }
+  newGame(); render();
+}
+$('#again').addEventListener('click', startNew);
+$('#newBtn').addEventListener('click', e => {
+  const btn = e.currentTarget;
+  if (resetTimer) { clearTimeout(resetTimer); resetTimer = null; btn.textContent = 'New game'; startNew(); return; }
+  btn.textContent = 'Tap again to reset';
+  resetTimer = setTimeout(() => { resetTimer = null; btn.textContent = 'New game'; }, 3000);
+});
+
+/* ================= Online play (WebRTC via PeerJS) =================
+   Host-authoritative: the host rolls the dice and is the source of truth on (re)connect.
+   Only dice results and moves travel over the wire; both sides replay them with the same rules engine. */
+const ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const ID_PREFIX = 'mkchess-';
+// STUN finds a direct route between the two networks. The TURN entry is a free public relay used only
+// when no direct route exists (strict mobile or office networks). Swap in your own TURN credentials for reliability.
+const ICE = [
+  { urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }, { urls: 'stun:stun.cloudflare.com:3478' },
+  { urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' }
+];
+const rnd = n => Array.from(crypto.getRandomValues(new Uint8Array(n)), x => ALPHA[x % 32]).join('');
+let pumpT = null;
+
+function tokenFor(code) {
+  try { let t = localStorage.getItem('mkc-t-' + code); if (!t) { t = rnd(16); localStorage.setItem('mkc-t-' + code, t); } return t; }
+  catch (e) { return net.fbToken || (net.fbToken = rnd(16)); }
+}
+function loadPeer() {
+  if (window.Peer) return Promise.resolve();
+  // A local peerjs.min.js next to this page wins; the CDNs are fallbacks.
+  const srcs = ['peerjs.min.js', 'https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js',
+    'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js'];
+  return srcs.reduce((p, src) => p.then(() => window.Peer ? null : new Promise(res => {
+    const s = document.createElement('script'); s.src = src; s.onload = () => res(); s.onerror = () => res(); document.head.appendChild(s);
+  })), Promise.resolve()).then(() => { if (!window.Peer) throw new Error('no peerjs'); });
+}
+
+const LB = { menu: $('#lbMenu'), wait: $('#lbWait'), busy: $('#lbBusy') };
+function lobby(view, msg, busyText) {
+  $('#lobby').hidden = !view;
+  for (const k in LB) LB[k].hidden = k !== view;
+  $('#lbMsg').textContent = msg || '';
+  if (busyText) $('#lbBusyTitle').textContent = busyText;
+}
+function lobbyErr(msg) { teardown(); render(); lobby('menu', msg); }
+
+function netSend(obj) {
+  if (!net.on || !net.conn || !net.conn.open) return;
+  try { net.conn.send(obj); } catch (e) { /* the heartbeat will notice a dead link */ }
+}
+function setStatus(s) {
+  if (net.status === s) return;
+  net.status = s;
+  if (s === 'lost' && net.on && !net.host) scheduleRedial();
+  render();
+}
+function teardown(delay) {
+  const c = net.conn, p = net.peer;
+  net.cancel++; clearInterval(net.hb); clearTimeout(net.retry); clearTimeout(net.stT); clearTimeout(net.rollT); clearTimeout(pumpT);
+  Object.assign(net, { on: false, host: false, peer: null, conn: null, status: 'idle', queue: [], waitRoll: false, guestToken: null, stall: 0 });
+  setTimeout(() => { try { c && c.close(); } catch (e) {} try { p && p.destroy(); } catch (e) {} }, delay || 0);
+}
+function startHeartbeat() {
+  clearInterval(net.hb);
+  net.hb = setInterval(() => {
+    if (net.conn && net.conn.open) { try { net.conn.send({ k: 'ping' }); } catch (e) {} }
+    if (net.on && net.status === 'connected' && Date.now() - net.lastSeen > 15000) setStatus('lost');
+  }, 4000);
+}
+
+// ---- host ----
+function hostMatch() {
+  teardown(); lobby('busy', '', 'Creating match…');
+  loadPeer().then(() => tryHost(0), () => lobbyErr('Could not load the online library. Check your internet connection.'));
+}
+function tryHost(n) {
+  if (n > 5) { lobbyErr('Could not create a match. Please try again.'); return; }
+  const code = rnd(5), my = ++net.cancel;
+  let peer;
+  try { peer = new Peer(ID_PREFIX + code, { debug: 0, config: { iceServers: ICE } }); }
+  catch (e) { lobbyErr('Could not start online play on this device.'); return; }
+  net.peer = peer;
+  peer.on('open', () => {
+    if (my !== net.cancel) return;
+    Object.assign(net, { on: true, host: true, color: 'w', code, status: 'waiting', conn: null, guestToken: null, queue: [] });
+    newGame(); render(); startHeartbeat();
+    $('#codeBig').textContent = code;
+    $('#lbWaitText').textContent = 'Waiting for your opponent to join…';
+    const base = /^https?:/.test(location.protocol) ? location.origin + location.pathname : '';
+    net.link = base ? base + '#join=' + code : '';
+    $('#copyLink').hidden = !net.link; $('#shareBtn').hidden = !navigator.share;
+    lobby('wait');
+  });
+  peer.on('error', e => {
+    if (my !== net.cancel) return;
+    if (e.type === 'unavailable-id') { try { peer.destroy(); } catch (x) {} tryHost(n + 1); return; }
+    if (!net.on) { lobbyErr('Could not create a match (' + e.type + ').'); return; }
+    if (['network', 'server-error', 'socket-error', 'socket-closed'].includes(e.type)) setTimeout(() => { try { peer.reconnect(); } catch (x) {} }, 3000);
+  });
+  peer.on('disconnected', () => { if (my === net.cancel) setTimeout(() => { try { peer.reconnect(); } catch (x) {} }, 2000); });
+  peer.on('connection', conn => onGuestConn(conn, my));
+}
+function onGuestConn(conn, my) {
+  conn.on('data', msg => {
+    if (my !== net.cancel) return;
+    if (net.conn !== conn) {
+      if (!msg || msg.k !== 'hello') return;
+      // The first guest to arrive owns the seat; only that guest (same token) may come back after a drop.
+      if (net.guestToken && msg.token !== net.guestToken) {
+        try { conn.send({ k: 'full' }); } catch (e) {}
+        setTimeout(() => { try { conn.close(); } catch (e) {} }, 300); return;
+      }
+      net.guestToken = msg.token;
+      const old = net.conn; net.conn = conn; net.lastSeen = Date.now();
+      if (old && old !== conn) { try { old.close(); } catch (e) {} }
+      net.status = 'connected'; lobby(null); toast('Opponent connected'); render(); sendState();
+      return;
+    }
+    onNetMsg(msg);
+  });
+  const lost = () => { if (my === net.cancel && net.conn === conn) setStatus('lost'); };
+  conn.on('close', lost); conn.on('error', lost);
+}
+
+// ---- guest ----
+function joinMatch(raw) {
+  const code = (raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (code.length !== 5) { $('#lbMsg').textContent = 'Enter the 5-character code.'; return; }
+  teardown(); lobby('busy', '', 'Connecting to ' + code + '…');
+  net.code = code; net.token = tokenFor(code);
+  loadPeer().then(() => dial(code, false), () => lobbyErr('Could not load the online library. Check your internet connection.'));
+}
+function dial(code, silent) {
+  const my = ++net.cancel;
+  net.code = code;
+  let peer, opened = false;
+  const fail = msg => { clearTimeout(to); if (my !== net.cancel) return; if (silent) scheduleRedial(); else lobbyErr(msg); };
+  const to = setTimeout(() => { if (!opened) fail('Could not reach the match. Check the code and your connection.'); }, 20000);
+  try { peer = new Peer(ID_PREFIX + 'g-' + rnd(10), { debug: 0, config: { iceServers: ICE } }); }
+  catch (e) { fail('Could not start online play on this device.'); return; }
+  net.peer = peer;
+  startHeartbeat();
+  peer.on('open', () => {
+    if (my !== net.cancel) return;
+    const conn = peer.connect(ID_PREFIX + code, { reliable: true, serialization: 'json' });
+    net.conn = conn;
+    conn.on('open', () => { if (my !== net.cancel) return; opened = true; clearTimeout(to); net.lastSeen = Date.now(); try { conn.send({ k: 'hello', token: net.token }); } catch (e) {} });
+    conn.on('data', msg => {
+      if (my !== net.cancel) return;
+      if (msg && msg.k === 'full') { lobbyErr('That match already has two players.'); return; }
+      onNetMsg(msg);
+    });
+    const lost = () => { if (my === net.cancel && net.on) setStatus('lost'); };
+    conn.on('close', lost); conn.on('error', lost);
+  });
+  peer.on('error', e => {
+    if (my !== net.cancel) return;
+    fail(e.type === 'peer-unavailable' ? 'No match found with that code.' : 'Connection problem (' + e.type + ').');
+  });
+}
+function scheduleRedial() {
+  clearTimeout(net.retry);
+  net.retry = setTimeout(() => {
+    if (!net.on || net.host || net.status === 'connected') return;
+    try { net.peer && net.peer.destroy(); } catch (e) {}
+    dial(net.code, true);
+  }, 2500);
+}
+
+// ---- messages ----
+function snapshot() {
+  const pieces = [], megas = [];
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    const p = G.board[r][c]; if (!p) continue;
+    if (p.t === 'M') { if (p.ar === r && p.ac === c) megas.push({ id: p.id, ar: p.ar, ac: p.ac, s: p.s }); }
+    else pieces.push([r, c, p.t, p.c, p.m ? 1 : 0]);
+  }
+  return { pieces, megas, turn: G.turn, phase: G.phase === 'promo' ? (G.roll ? 'move' : 'roll') : G.phase, roll: G.roll, nextId: G.nextId,
+           ep: G.ep, over: G.over, last: G.last, log: G.log, turnNo: G.turnNo, msg: G.msg };
+}
+function sendState() {
+  if (!net.host || !net.conn) return;
+  clearTimeout(net.stT);
+  if (G.busy || G.rolling) { net.stT = setTimeout(sendState, 200); return; }
+  netSend({ k: 'state', color: opp(net.color), s: snapshot() });
+}
+function applySnap(s, color) {
+  const b = Array.from({ length: 8 }, () => Array(8).fill(null));
+  for (const [r, c, t, col, m] of s.pieces) b[r][c] = { t, c: col, m: !!m };
+  for (const g of s.megas) {
+    const o = { t: 'M', c: 'x', id: g.id, ar: g.ar, ac: g.ac, s: g.s };
+    for (let i = 0; i < g.s; i++) for (let j = 0; j < g.s; j++) b[g.ar + i][g.ac + j] = o;
+  }
+  newGame();
+  Object.assign(G, { board: b, turn: s.turn, nextId: s.nextId, ep: s.ep, over: s.over, last: s.last, log: s.log, turnNo: s.turnNo, msg: s.msg, roll: s.roll, phase: s.phase });
+  Object.assign(net, { on: true, color, status: 'connected', waitRoll: false });
+  lobby(null);
+  if (s.over) { G.phase = 'over'; G.mode = null; render(); }
+  else if (s.phase === 'move') resolveRoll(s.roll);
+  else { G.phase = 'roll'; G.roll = null; G.mode = 'normal'; G.legal = legalFor(G.board, G.turn, G.ep); render(); }
+}
+function resync() { if (net.host) sendState(); else netSend({ k: 'hello', token: net.token }); }
+function onNetMsg(msg) {
+  if (!msg || typeof msg !== 'object') return;
+  net.lastSeen = Date.now();
+  if (net.on && net.status === 'lost' && net.conn && net.conn.open) setStatus('connected');
+  if (msg.k === 'ping') return;
+  if (msg.k === 'hello') { if (net.host) sendState(); return; }
+  net.queue.push(msg); pump();
+}
+function readiness(msg) {
+  const busy = G.busy || G.rolling;
+  switch (msg.k) {
+    case 'state': case 'new': return busy ? 'wait' : 'ok';
+    case 'bye': return 'ok';
+    case 'roll': if (net.host) return 'bad'; if (busy) return 'wait'; return G.phase === 'roll' ? 'ok' : 'bad';
+    case 'rollreq': if (!net.host) return 'bad'; if (busy) return 'wait'; return G.phase === 'roll' && G.turn === opp(net.color) ? 'ok' : 'bad';
+    case 'n': case 'm': if (busy) return 'wait'; return (G.phase === 'roll' || G.phase === 'move') && G.turn === opp(net.color) ? 'ok' : 'bad';
+    default: return 'skip';
+  }
+}
+// Messages wait their turn if an animation is still running, then are applied in order.
+function pump() {
+  clearTimeout(pumpT);
+  while (net.queue.length) {
+    const msg = net.queue[0], st = readiness(msg);
+    if (st === 'wait') {
+      if (++net.stall > 60) { net.queue.length = 0; net.stall = 0; resync(); return; }
+      pumpT = setTimeout(pump, 100); return;
+    }
+    net.stall = 0; net.queue.shift();
+    if (st === 'ok') applyMsg(msg); else if (st === 'bad') resync();
+  }
+}
+function applyMsg(msg) {
+  switch (msg.k) {
+    case 'state': applySnap(msg.s, msg.color); break;
+    case 'roll': { const v = msg.v | 0; if (v < 1 || v > 6) return resync(); startRoll(v); break; }
+    case 'rollreq': { const v = d6(); netSend({ k: 'roll', v }); startRoll(v); break; }
+    case 'n': {
+      const q = msg.m || {};
+      const m = legalFor(G.board, G.turn, G.ep).find(x => x.fr === q.fr && x.fc === q.fc && x.tr === q.tr && x.tc === q.tc);
+      if (!m) return resync();
+      doNormal(m, m.promo ? (['q', 'r', 'b', 'n'].includes(msg.promo) ? msg.promo : 'q') : null, true); break;
+    }
+    case 'm': {
+      const mg = megasOn(G.board).find(x => x.id === msg.id);
+      const t = mg && G.phase === 'move' && G.roll === 6 ? megaMoves(G.board, mg, G.turn).find(x => x.nr === msg.nr && x.nc === msg.nc) : null;
+      if (!t) return resync();
+      doMega(msg.id, t, true); break;
+    }
+    case 'new': net.color = opp(net.color); newGame(); lobby(null); render(); toast('New game: you are ' + NAME[net.color]); break;
+    case 'bye':
+      if (net.host) { net.guestToken = null; setStatus('lost'); $('#lbWaitText').textContent = 'Your opponent left. Share the code to let someone join.'; lobby('wait'); }
+      else { teardown(); render(); lobby('menu', 'The host left the match.'); }
+      break;
+  }
+}
+function leaveMatch() {
+  netSend({ k: 'bye' });
+  teardown(300); render();
+  toast('Left the online match');
+}
+
+// ---- lobby UI ----
+function copyText(t) {
+  const done = () => toast('Copied');
+  const fallback = () => { const a = document.createElement('textarea'); a.value = t; document.body.appendChild(a); a.select(); try { document.execCommand('copy'); done(); } catch (e) { toast(t); } a.remove(); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done, fallback); else fallback();
+}
+$('#playOnline').addEventListener('click', () => lobby('menu'));
+$('#lbClose').addEventListener('click', () => lobby(null));
+$('#mkCreate').addEventListener('click', hostMatch);
+$('#mkJoin').addEventListener('click', () => joinMatch($('#joinCode').value));
+$('#joinCode').addEventListener('input', e => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); });
+$('#joinCode').addEventListener('keydown', e => { if (e.key === 'Enter') joinMatch(e.target.value); });
+const cancelLobby = () => { if (net.on && net.host) netSend({ k: 'bye' }); teardown(); render(); lobby('menu'); };
+$('#lbCancel').addEventListener('click', cancelLobby);
+$('#lbCancel2').addEventListener('click', cancelLobby);
+$('#copyCode').addEventListener('click', () => copyText(net.code));
+$('#copyLink').addEventListener('click', () => copyText(net.link));
+$('#shareBtn').addEventListener('click', () => {
+  const data = { title: 'Mega Knight Chess', text: 'Join my Mega Knight Chess match. Code: ' + net.code, url: net.link || undefined };
+  try { navigator.share(data).catch(() => {}); } catch (e) {}
+});
+$('#leaveBtn').addEventListener('click', leaveMatch);
+
+newGame(); render();
+// An invite link like  .../#join=K7QF  opens the game and joins straight away.
+{
+  const m = /join=([A-Za-z0-9]{5})/.exec(location.hash || '');
+  if (m) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} $('#joinCode').value = m[1].toUpperCase(); lobby('menu'); joinMatch(m[1]); }
+}
+})();
+
+/* Footer menus: Privacy policy and Credits */
+(function () {
+  const appEls = [document.querySelector('.app'), document.getElementById('foot')];
+  const menus = [['ppBtn', 'ppMenu'], ['crBtn', 'crMenu']];
+  let open = null, opener = null;
+  function show(btn, menu) {
+    open = menu; opener = btn; menu.hidden = false; appEls.forEach(e => e && (e.inert = true));
+    const p = menu.querySelector('.inf-panel'); p.scrollTop = 0; menu.querySelector('.inf-x').focus({ preventScroll: true });
+  }
+  function hide() {
+    if (!open) return;
+    open.hidden = true; appEls.forEach(e => e && (e.inert = false));
+    const o = opener; open = opener = null; try { o.focus({ preventScroll: true }); } catch (e) {}
+  }
+  menus.forEach(([b, m]) => {
+    const btn = document.getElementById(b), menu = document.getElementById(m);
+    btn.addEventListener('click', () => show(btn, menu));
+    menu.addEventListener('click', e => { if (e.target === menu || e.target.closest('[data-close]')) hide(); });
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && open) hide(); });
+})();
+</script>
+
+</body></html>
